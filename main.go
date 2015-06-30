@@ -1,31 +1,60 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 )
 
 var templates = template.Must(template.ParseGlob("templates/*"))
 
 func handler(w http.ResponseWriter, r *http.Request) {
 
-	if r.Method == "POST" {
-		log.Printf("Received post")
-	}
-	title := r.URL.Path[1:]
-	err := templates.ExecuteTemplate(w, "index", title)
+	log.Println(r.URL.Query())
+	log.Println(r.Method)
+	body, _ := ioutil.ReadAll(r.Body)
+	log.Println(string(body))
+}
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+type UserReq struct {
+	Email string `json:"email"`
+}
+
+/**
+ * Only handles POST.
+ */
+func getuser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Unsupported", http.StatusMethodNotAllowed)
 	}
+	decoder := json.NewDecoder(r.Body)
+	var t UserReq
+	err := decoder.Decode(&t)
+	if err != nil {
+		http.Error(w, "Unable to parse JSON", http.StatusBadRequest)
+	}
+	fmt.Fprintf(w, "Hello, user at %s\n", t.Email)
+
+}
+
+func cron() {
+	ticker := time.NewTicker(time.Second)
+	for _ = range ticker.C {
+		//fmt.Println("hi")
+		//run periodic update code.
+	}
+
 }
 
 func main() {
 	http.HandleFunc("/", handler)
+	http.HandleFunc("/getuser", getuser)
 
 	//handle static files, perhaps better left to nginx in future?
 	fs := http.FileServer(http.Dir("static"))
@@ -44,6 +73,7 @@ func main() {
 		}
 	}
 	log.Printf("Listening on port: " + port[1:])
+	go cron()
 
 	log.Fatal(http.ListenAndServe(port, nil))
 }
